@@ -24,8 +24,8 @@ The analysis applies the following techniques:
 
 ## Files in this Repository
 
-- `Victoria_Idegwu_Data_Analytics_II_CASE1.qmd` - Quarto source file containing the full analysis code and report.
-- `Victoria_Idegwu_Data_Analytics_II_CASE1.html` - Rendered HTML report.
+- `Victoria_Idegwu_CASE1DA2_FINAL.qmd` - Quarto source file containing the full reproducible analysis code and report.
+- `Victoria_Idegwu_CASE1DA2_FINAL.html` - Rendered HTML report. This file can be downloaded and opened in a web browser.
 - `DA_Exam_Data_Anonymised.csv` - Anonymised dataset used for the analysis.
 
 ## Confidentiality Note
