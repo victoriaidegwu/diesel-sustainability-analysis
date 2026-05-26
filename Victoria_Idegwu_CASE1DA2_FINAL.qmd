@@ -1,0 +1,637 @@
+---
+title: "Diesel Sustainability Analysis Across Telecom Network Sites"
+author: "Victoria Idegwu"
+date: "13 May 2026"
+format:
+  html:
+    toc: true
+    embed-resources: true
+execute:
+  echo: false
+  message: false
+  warning: false
+editor: source
+---
+<style>
+/* Neater report tables: centered content, compact width, and safe overflow for wider tables */
+.cell-output-display {
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+/* Default table style */
+table {
+  border-collapse: collapse;
+  width: auto !important;
+  max-width: 92%;
+  margin: 0.8em auto 1.2em auto;
+  font-size: 0.92em;
+  table-layout: auto;
+}
+
+th, td {
+  border: 1px solid #6b7280;
+  padding: 5px 8px;
+  text-align: center !important;
+  vertical-align: middle;
+  overflow-wrap: anywhere;
+  word-break: normal;
+  white-space: normal;
+}
+
+th {
+  background-color: #f3f4f6;
+  font-weight: 700;
+}
+
+caption {
+  caption-side: top;
+  text-align: center;
+  font-weight: 700;
+  margin-bottom: 0.4em;
+}
+
+/* Keep small 2-column and 3-column tables compact instead of stretched */
+table td, table th {
+  min-width: 70px;
+}
+
+table td:nth-child(1), table th:nth-child(1) {
+  min-width: 90px;
+}
+
+/* Prevent long text cells from forcing the table into the table-of-contents area */
+table td:last-child, table th:last-child {
+  max-width: 360px;
+}
+
+/* Keep chart images within the readable report area */
+img {
+  max-width: 100%;
+  height: auto;
+}
+</style>
+
+
+# Executive Summary
+
+This study examines diesel sustainability across selected telecom network sites using anonymised operational spot-check data from a telecom infrastructure operations context. As a Manager, Regional Technical Operations, I work closely with site performance, diesel monitoring, grid availability, vendor follow-up, and operational stability. These areas are important because many telecom sites still depend on diesel generators when grid power is unavailable, unstable, or insufficient. If diesel levels and consumption patterns are not properly monitored, sites can move quickly towards dry-date positions, creating avoidable service risks.
+
+The dataset used for this analysis contains 118 site observations. It includes site ID, grid availability, diesel level at spot-check, date of spot-check, field consumption per day (CPD), and available days. Available days was used as the main outcome variable because it is the operational KPI used by the team to estimate how long each site can continue operating before reaching a critical diesel position.
+
+The study applied exploratory data analysis, visualisation, hypothesis testing, correlation analysis, and regression analysis. The results show that diesel level has a positive relationship with available days, while CPD has a negative relationship with available days. The analysis also shows that grid availability makes a statistically significant difference in available days.
+
+The regression model explains about 72.5% of the variation in available days. Diesel level, grid availability, and CPD were all statistically significant explanatory variables for the available-days KPI. The findings support a more risk-based approach to diesel planning, where sites are prioritised using available days, CPD, diesel level, and grid status together rather than diesel level alone.
+
+# 1. Introduction
+
+Telecom network sites require stable power to remain available to customers and mobile network operators. In practice, grid power is not always reliable across all locations. Some sites have grid supply, while others depend more heavily on diesel generators. This makes diesel sustainability an important operational concern.
+
+In regional technical operations, one of the key questions is not only whether a site has diesel, but how long that diesel can realistically sustain the site. A site with a moderate diesel level may still be at risk if its daily consumption is high. In the same way, a site with grid availability may preserve diesel for longer than a site operating mainly on generator supply.
+
+This study focuses on the relationship between diesel level, grid availability, CPD, and available days across selected telecom network sites. The aim is to use operational data to identify the factors that influence diesel sustainability and to support better site prioritisation.
+
+The business question guiding the analysis is:
+
+**How do diesel level, grid availability, and consumption per day affect available days across telecom network sites?**
+
+# 2. Professional Disclosure
+
+I work as a Manager, Regional Technical Operations in the telecommunications infrastructure sector. My role involves monitoring site performance, diesel sustainability, grid availability, vendor response, and general operational stability across network sites.
+
+Diesel monitoring is directly linked to my day-to-day work because a site with poor diesel sustainability can quickly become an operational risk. If such sites are not identified early, they may require emergency refuelling, escalation, or urgent vendor intervention. This can affect network availability and increase operational pressure on the regional team.
+
+The five techniques used in this study are relevant to this operational context. Exploratory Data Analysis helps me understand the current condition of the dataset and identify unusual values or gaps. Visualisation helps present the pattern of diesel level, CPD, grid availability, and available days in a way that is easy for operations teams to understand. Hypothesis testing helps check whether observed differences or relationships are statistically meaningful. Correlation analysis helps show the strength and direction of relationships among key variables. Regression analysis helps estimate how diesel level, grid availability, and CPD jointly explain the available-days KPI.
+
+These techniques are also aligned with the course textbook’s focus on using data analytics methods to support business decision-making. In this case, the analysis supports practical decisions around diesel planning, site prioritisation, and proactive intervention.
+
+# 3. Data Collection and Sampling
+
+The dataset was collected from operational diesel spot-check records across selected telecom network sites. The records contain site-level information on diesel level, grid availability, field CPD, date of spot-check, and available days.
+
+The sampling frame consists of telecom sites under regional technical operations monitoring. Each observation represents one site spot-check record. The dataset contains 118 observations, which satisfies the minimum requirement of at least 100 observations for this assessment.
+
+The variables used in this study are:
+
+- **Site_ID:** Unique anonymised site identifier.
+- **Grid_Availability:** Whether grid power was available at the site.
+- **Diesel_Level:** Diesel volume recorded during the spot-check.
+- **Spotcheck_Date:** Date the site diesel position was captured.
+- **CPD:** Field consumption per day.
+- **Available_Days:** Estimated number of days the available diesel can sustain the site. This was obtained from operational diesel monitoring records and is based on diesel level and field CPD.
+
+Available days is used as an operational sustainability KPI because it translates diesel level and consumption rate into a practical planning indicator. It helps identify which sites are closest to dry-date risk and should be prioritised for intervention.
+
+For confidentiality, actual site identifiers were anonymised using generic labels such as `Site_001`, `Site_002`, and `Site_003`. This anonymisation only affects site names and does not change the numerical data used for the statistical tests, visualisations, or regression model.
+
+```{r setup, include=FALSE}
+# Load packages
+library(tidyverse)
+library(ggplot2)
+library(corrplot)
+library(broom)
+library(knitr)
+library(readxl)
+
+# Cleaner output settings
+knitr::opts_chunk$set(
+  echo = FALSE,
+  message = FALSE,
+  warning = FALSE,
+  dev = "png",
+  fig.align = "center",
+  fig.width = 7,
+  fig.height = 5
+)
+
+# Load dataset
+# Keep "DA Exam Data.xlsx" inside Posit Cloud, but do not upload the original file to GitHub if it contains real site IDs.
+data_file <- if (file.exists("DA Exam Data Anonymised.xlsx")) {
+  "DA Exam Data Anonymised.xlsx"
+} else if (file.exists("DA Exam Data.xlsx")) {
+  "DA Exam Data.xlsx"
+} else {
+  stop("Please upload 'DA Exam Data.xlsx' or 'DA Exam Data Anonymised.xlsx' into this Posit project folder.")
+}
+
+my_data <- read_excel(data_file)
+
+# Rename columns for easier analysis
+colnames(my_data) <- c(
+  "SN",
+  "Site_ID",
+  "Grid_Availability",
+  "Diesel_Level",
+  "Spotcheck_Date",
+  "CPD",
+  "Available_Days"
+)
+
+# Convert Grid Availability to numeric:
+# Yes = 1, No = 0. This also handles already-coded 1/0 values.
+my_data <- my_data %>%
+  mutate(
+    Grid_Availability = case_when(
+      str_to_lower(str_trim(as.character(Grid_Availability))) %in% c("yes", "y", "1", "available") ~ 1,
+      str_to_lower(str_trim(as.character(Grid_Availability))) %in% c("no", "n", "0", "not available") ~ 0,
+      TRUE ~ NA_real_
+    ),
+    Spotcheck_Date = as.Date(Spotcheck_Date)
+  )
+
+# Anonymise site identifiers before any table or chart is displayed.
+# This changes only the labels, not the numerical data.
+my_data <- my_data %>%
+  mutate(
+    Site_ID = paste0("Site_", str_pad(row_number(), width = 3, pad = "0")),
+    Grid_Group = factor(
+      Grid_Availability,
+      levels = c(0, 1),
+      labels = c("No Grid", "Grid Available")
+    )
+  )
+
+# Create a safe CSV file for GitHub upload.
+write_csv(my_data %>% select(-Grid_Group), "DA_Exam_Data_Anonymised.csv")
+```
+
+# 4. Data Loading and Preparation
+
+The dataset was loaded into R and prepared for analysis. The preparation stage included renaming columns, converting grid availability into a binary variable, formatting the spot-check date, and anonymising the site identifiers before displaying or plotting the data.
+
+```{r data-preview, results='asis'}
+my_data %>%
+  select(Site_ID, Grid_Availability, Diesel_Level, Spotcheck_Date, CPD, Available_Days) %>%
+  slice_head(n = 6) %>%
+  kable(align = "c", caption = "Table 1: Preview of the anonymised dataset")
+```
+
+# 5. Data Description
+
+The dataset contains both numerical and categorical variables. Diesel level, CPD, and available days are numerical variables. Grid availability was converted into a binary numeric variable for analysis, where 1 represents sites with grid availability and 0 represents sites without grid availability.
+
+```{r variable-description, results='asis'}
+variable_table <- tibble(
+  Variable = c("SN", "Site_ID", "Grid_Availability", "Diesel_Level", "Spotcheck_Date", "CPD", "Available_Days"),
+  Type = c("Numeric", "Character", "Numeric/Binary", "Numeric", "Date", "Numeric", "Numeric"),
+  Description = c(
+    "Serial number for each observation",
+    "Anonymised unique site identifier",
+    "Binary grid status: 1 = grid available, 0 = no grid",
+    "Diesel volume recorded during spot-check",
+    "Date of diesel spot-check",
+    "Consumption per day",
+    "Estimated number of days diesel can sustain the site"
+  )
+)
+
+variable_table %>%
+  kable(align = "c", caption = "Table 2: Variable description")
+```
+
+```{r summary-statistics, results='asis'}
+summary_table <- tibble(
+  Metric = c(
+    "Number of observations",
+    "Average diesel level",
+    "Minimum diesel level",
+    "Maximum diesel level",
+    "Average CPD",
+    "Average available days",
+    "Minimum available days",
+    "Maximum available days"
+  ),
+  Value = c(
+    nrow(my_data),
+    round(mean(my_data$Diesel_Level, na.rm = TRUE), 2),
+    round(min(my_data$Diesel_Level, na.rm = TRUE), 2),
+    round(max(my_data$Diesel_Level, na.rm = TRUE), 2),
+    round(mean(my_data$CPD, na.rm = TRUE), 2),
+    round(mean(my_data$Available_Days, na.rm = TRUE), 2),
+    round(min(my_data$Available_Days, na.rm = TRUE), 2),
+    round(max(my_data$Available_Days, na.rm = TRUE), 2)
+  )
+)
+
+summary_table %>%
+  kable(align = "c", caption = "Table 3: Summary statistics for the dataset")
+```
+
+The summary statistics show that the dataset contains 118 site observations. The average diesel level is approximately 486.3 litres, the average CPD is approximately 41.19, and the average available days is approximately 14 days. The dataset also shows clear variation across sites. Some sites have very low available days, while others have much higher diesel sustainability.
+
+From an operational point of view, this variation is important because it means that sites should not be treated equally during diesel planning. Sites with short available days require faster attention than sites with longer sustainability.
+
+# 6. Exploratory Data Analysis
+
+Exploratory Data Analysis was carried out to understand the dataset before applying more formal statistical methods. The focus was on checking the structure of the data, identifying missing values, reviewing possible outliers, and understanding the basic distribution of diesel level, CPD, and available days.
+
+```{r missing-values, results='asis'}
+missing_table <- my_data %>%
+  select(SN, Site_ID, Grid_Availability, Diesel_Level, Spotcheck_Date, CPD, Available_Days) %>%
+  summarise(across(everything(), ~ sum(is.na(.)))) %>%
+  pivot_longer(cols = everything(), names_to = "Variable", values_to = "Missing_Values")
+
+missing_table %>%
+  kable(align = "c", caption = "Table 4: Missing value check")
+```
+
+The missing value check shows that there are no missing values in the dataset. This means all 118 site observations are complete for the selected variables and can be used for the analysis.
+
+```{r numerical-summary, results='asis'}
+numerical_summary <- my_data %>%
+  select(Diesel_Level, CPD, Available_Days) %>%
+  summarise(
+    across(
+      everything(),
+      list(
+        Minimum = ~ min(.x, na.rm = TRUE),
+        Mean = ~ mean(.x, na.rm = TRUE),
+        Median = ~ median(.x, na.rm = TRUE),
+        Maximum = ~ max(.x, na.rm = TRUE)
+      )
+    )
+  ) %>%
+  pivot_longer(
+    cols = everything(),
+    names_to = c("Variable", "Statistic"),
+    names_pattern = "(.*)_(.*)",
+    values_to = "Value"
+  ) %>%
+  mutate(Value = round(Value, 2))
+
+numerical_summary %>%
+  kable(align = "c", caption = "Table 5: Descriptive statistics for key numerical variables")
+```
+
+Two data quality issues were considered during the EDA stage. First, missing values were checked across all variables, and the result showed no missing values. Therefore, no observation had to be removed due to incomplete data. Second, possible outliers were reviewed in diesel level, CPD, and available days. Some sites had very high diesel levels and available days compared with others, but these values were retained because they reflect realistic operational differences in site configuration, diesel holding capacity, grid condition, and consumption pattern.
+
+This stage helped confirm that the dataset was suitable for analysis. It also showed that available days varies meaningfully across sites, which makes it a useful outcome variable for diesel sustainability analysis.
+
+# 7. Data Visualisation
+
+Visualisation was used to communicate the main patterns in the data. The charts focus on the relationships between diesel level, CPD, grid availability, and available days. These visualisations are useful because operations managers often need quick and clear insights for site prioritisation.
+
+## 7.1 Diesel Level and Available Days
+
+```{r}
+chart1 <- ggplot(my_data, aes(x = Diesel_Level, y = Available_Days)) +
+  geom_point() +
+  geom_smooth(method = "lm", se = FALSE) +
+  labs(
+    title = "Diesel Level vs Available Days",
+    x = "Diesel Level",
+    y = "Available Days"
+  )
+
+print(chart1)
+```
+
+*Figure 1: Diesel Level vs Available Days*
+
+The chart shows a positive relationship between diesel level and available days. This means that sites with higher diesel levels generally have more available days. This is expected operationally because diesel level is a key input in the available-days KPI.
+
+## 7.2 CPD and Available Days
+
+```{r}
+chart2 <- ggplot(my_data, aes(x = CPD, y = Available_Days)) +
+  geom_point() +
+  geom_smooth(method = "lm", se = FALSE) +
+  labs(
+    title = "CPD vs Available Days",
+    x = "Consumption Per Day",
+    y = "Available Days"
+  )
+
+print(chart2)
+```
+
+*Figure 2: CPD vs Available Days*
+
+This chart shows the relationship between CPD and available days. Sites with higher CPD consume diesel faster, which can reduce available days. This is important because diesel volume alone may not give the full picture. A site may appear safe based on diesel level, but if its CPD is high, it may still require early intervention.
+
+## 7.3 Grid Availability and Available Days
+
+```{r}
+chart3 <- ggplot(my_data, aes(x = Grid_Group, y = Available_Days)) +
+  geom_boxplot() +
+  labs(
+    title = "Grid Availability vs Available Days",
+    x = "Grid Availability",
+    y = "Available Days"
+  )
+
+print(chart3)
+```
+
+*Figure 3: Grid Availability vs Available Days*
+
+This chart compares available days between sites with and without grid availability. Sites with grid availability are expected to preserve diesel better because they do not depend on generator power all the time. This makes grid availability an important factor in diesel sustainability planning.
+
+## 7.4 Distribution of Available Days
+
+```{r}
+chart4 <- ggplot(my_data, aes(x = Available_Days)) +
+  geom_histogram(bins = 15) +
+  labs(
+    title = "Distribution of Available Days",
+    x = "Available Days",
+    y = "Number of Sites"
+  )
+
+print(chart4)
+```
+
+*Figure 4: Distribution of Available Days*
+
+The histogram shows how available days are distributed across the selected sites. This helps identify whether most sites have reasonable diesel sustainability or whether many sites are clustered around low available days. For operations, sites with low available days are more urgent because they may approach dry-date positions faster.
+
+## 7.5 Top 10 Sites with Lowest Available Days
+
+```{r}
+lowest_sites <- my_data %>%
+  arrange(Available_Days) %>%
+  slice_head(n = 10)
+
+chart5 <- ggplot(lowest_sites, aes(x = reorder(Site_ID, Available_Days), y = Available_Days)) +
+  geom_col() +
+  coord_flip() +
+  labs(
+    title = "Top 10 Sites with Lowest Available Days",
+    x = "Site ID",
+    y = "Available Days"
+  )
+
+print(chart5)
+```
+
+*Figure 5: Top 10 Sites with Lowest Available Days*
+
+This chart identifies the ten sites with the lowest available days. These sites represent the most immediate diesel sustainability risks in the dataset. In a real operational setting, they should be prioritised for review, escalation, or diesel intervention.
+
+# 8. Hypothesis Testing
+
+Two hypothesis tests were conducted. The first test examined whether available days differ significantly between sites with grid availability and sites without grid availability. The second test examined whether diesel level has a statistically significant relationship with available days.
+
+## 8.1 Hypothesis Test 1: Grid Availability and Available Days
+
+The hypotheses are:
+
+- **Null hypothesis (H0):** There is no significant difference in available days between sites with grid availability and sites without grid availability.
+- **Alternative hypothesis (H1):** There is a significant difference in available days between sites with grid availability and sites without grid availability.
+
+```{r t-test-grid, results='asis'}
+t_test_grid <- t.test(
+  Available_Days ~ Grid_Group,
+  data = my_data
+)
+
+grid_test_table <- tibble(
+  Test = "Independent samples t-test",
+  Mean_No_Grid = round(unname(t_test_grid$estimate[1]), 2),
+  Mean_With_Grid = round(unname(t_test_grid$estimate[2]), 2),
+  Test_Statistic = round(unname(t_test_grid$statistic), 3),
+  P_Value = ifelse(t_test_grid$p.value < 0.001, "<0.001", as.character(signif(t_test_grid$p.value, 3))),
+  Decision = ifelse(t_test_grid$p.value < 0.05, "Reject H0", "Do not reject H0")
+)
+
+grid_test_table %>%
+  kable(align = "c", caption = "Table 6: Hypothesis test result for grid availability and available days")
+```
+
+The hypothesis test produced a p-value of 0.038. Since this is below the 0.05 significance level, the null hypothesis is rejected. This means there is a statistically significant difference in available days between sites with grid availability and sites without grid availability.
+
+The result also shows that sites without grid availability had an average of about 11.91 available days, while sites with grid availability had an average of about 16.08 available days. In business terms, this suggests that grid availability should be considered when prioritising sites for diesel intervention. Sites without grid availability are more exposed because they depend more heavily on diesel generation.
+
+## 8.2 Hypothesis Test 2: Diesel Level and Available Days
+
+The hypotheses are:
+
+- **Null hypothesis (H0):** There is no significant relationship between diesel level and available days.
+- **Alternative hypothesis (H1):** There is a significant relationship between diesel level and available days.
+
+```{r correlation-test-diesel, results='asis'}
+cor_test_diesel <- cor.test(
+  my_data$Diesel_Level,
+  my_data$Available_Days
+)
+
+diesel_test_table <- tibble(
+  Test = "Pearson correlation test",
+  Correlation = round(unname(cor_test_diesel$estimate), 3),
+  Test_Statistic = round(unname(cor_test_diesel$statistic), 3),
+  P_Value = ifelse(cor_test_diesel$p.value < 0.001, "<0.001", as.character(signif(cor_test_diesel$p.value, 3))),
+  Decision = ifelse(cor_test_diesel$p.value < 0.05, "Reject H0", "Do not reject H0")
+)
+
+diesel_test_table %>%
+  kable(align = "c", caption = "Table 7: Hypothesis test result for diesel level and available days")
+```
+
+The correlation test produced a p-value of 7.832e-15, which is far below the 0.05 significance level. Therefore, the null hypothesis is rejected. This means there is a statistically significant positive relationship between diesel level and available days. The correlation coefficient is 0.638, indicating a moderately strong positive relationship.
+
+Operationally, this confirms that diesel level is a meaningful input in the available-days KPI. However, it should not be used alone because CPD and grid availability also influence how long diesel will last.
+
+# 9. Correlation Analysis
+
+Correlation analysis was used to examine the strength and direction of the relationship between diesel level, CPD, and available days.
+
+```{r correlation-matrix, results='asis'}
+cor_data <- my_data[, c("Diesel_Level", "CPD", "Available_Days")]
+
+cor_matrix <- cor(cor_data)
+
+round(cor_matrix, 3) %>%
+  kable(align = "c", caption = "Table 8: Correlation matrix for key numerical variables")
+```
+
+```{r}
+corrplot(cor_matrix, method = "circle")
+```
+
+*Figure 6: Correlation plot*
+
+The correlation analysis shows a positive correlation of 0.638 between diesel level and available days. This is expected because available days is an operational KPI based partly on diesel level. Higher diesel levels generally increase the number of days a site can continue operating.
+
+The analysis also shows a negative correlation of -0.292 between CPD and available days. This is also operationally sensible because higher daily consumption reduces how long available diesel can sustain a site.
+
+Although available days is based on diesel level and CPD, the correlation analysis remains useful because it shows how strongly these operational variables move together across the selected sites. It also reinforces the need to consider CPD alongside diesel level during diesel planning.
+
+The relationship between diesel level, CPD, and available days is the most operationally direct relationship in the dataset because available days is based on diesel level and CPD. However, correlation alone should not be treated as full proof of causality. To confirm the operational effect more strongly, I would track the same sites over time before and after diesel refill or grid-restoration events. This would show whether changes in diesel level, CPD, or grid availability lead to measurable changes in available days and site risk.
+
+# 10. Regression Analysis
+
+Regression analysis was used to examine the combined relationship between diesel level, grid availability, CPD, and the available-days KPI.
+
+The regression model is:
+
+**Available_Days KPI = f(Diesel_Level, Grid_Availability, CPD)**
+
+```{r regression-model, results='asis'}
+model <- lm(
+  Available_Days ~ Diesel_Level + Grid_Availability + CPD,
+  data = my_data
+)
+
+regression_table <- tidy(model) %>%
+  mutate(
+    estimate = round(estimate, 4),
+    std.error = round(std.error, 4),
+    statistic = round(statistic, 3),
+    p.value = ifelse(p.value < 0.001, "<0.001", as.character(signif(p.value, 3)))
+  )
+
+regression_table %>%
+  kable(align = "c", caption = "Table 9: Regression coefficient table")
+```
+
+```{r model-performance, results='asis'}
+model_performance_raw <- glance(model)
+
+model_performance <- tibble(
+  Metric = c(
+    "R-squared",
+    "Adjusted R-squared",
+    "Residual standard error",
+    "F-statistic",
+    "Model p-value",
+    "Predictor degrees of freedom",
+    "Residual degrees of freedom",
+    "Number of observations"
+  ),
+  Value = c(
+    round(model_performance_raw$r.squared, 4),
+    round(model_performance_raw$adj.r.squared, 4),
+    round(model_performance_raw$sigma, 4),
+    round(model_performance_raw$statistic, 3),
+    ifelse(model_performance_raw$p.value < 0.001, "<0.001", as.character(signif(model_performance_raw$p.value, 3))),
+    model_performance_raw$df,
+    model_performance_raw$df.residual,
+    model_performance_raw$nobs
+  )
+)
+
+model_performance %>%
+  kable(align = "c", caption = "Table 10: Regression model performance summary")
+```
+
+The regression result shows that diesel level, grid availability, and CPD are all statistically significant explanatory variables for the available-days KPI. Diesel level has a positive coefficient of 0.0197, meaning that higher diesel volume is associated with higher available days. CPD has a negative coefficient of -0.1188, meaning that higher daily consumption reduces available days. Grid availability has a positive coefficient of 7.2859, suggesting that sites with grid availability tend to have higher available days than sites without grid availability, holding other variables constant.
+
+The regression model should be interpreted as an explanatory model of the available-days KPI, not as proof of independent causation. Since Available_Days is an operational KPI derived from diesel level and CPD, the model helps show how these inputs relate to the sustainability indicator across sites. Grid availability is included to provide additional operational context because grid-powered sites may depend less on diesel generation.
+
+The model has an R-squared value of 0.7247, meaning that diesel level, grid availability, and CPD together explain about 72.5% of the variation in available days across the sites. This is useful for operational planning because it confirms that diesel sustainability should be assessed using a combination of diesel level, CPD, grid status, and available days.
+
+## 10.1 Regression Diagnostic Plots
+
+```{r}
+par(mfrow = c(2, 2))
+plot(model)
+par(mfrow = c(1, 1))
+```
+
+*Figure 7: Regression diagnostic plots*
+
+The diagnostic plots were reviewed to assess whether the regression assumptions were reasonable. These plots help check linearity, residual spread, normality of residuals, and possible influential observations. Although some variation is expected in operational data, the model remains useful for explaining the main drivers of available days.
+
+# 11. Integrated Findings
+
+The analysis provides consistent evidence that diesel sustainability is mainly influenced by diesel level, CPD, and grid availability. The descriptive statistics show that the dataset contains 118 complete site observations, making it suitable for the selected analysis. The average available days across the dataset is about 14 days, but some sites have much lower available days and therefore require closer attention.
+
+The visualisations show that diesel level and available days move in the same direction, while CPD and available days move in opposite directions. This means that higher diesel volume improves site sustainability, while higher consumption reduces it. The grid availability comparison also shows that sites with grid availability tend to have higher average available days than sites without grid availability.
+
+The hypothesis tests strengthen the analysis. The first test shows that grid availability makes a statistically significant difference in available days. The second test shows that diesel level has a statistically significant positive relationship with the available-days KPI. Since available days is based on diesel level and CPD, this result is operationally expected, but it still confirms that diesel level is a meaningful input in site sustainability planning.
+
+The regression result further shows that diesel level, grid availability, and CPD are all statistically significant explanatory variables for available days. This supports the operational view that diesel sustainability should be assessed using a combination of current diesel level, daily consumption, grid condition, and available days.
+
+Overall, the findings support a risk-based approach. Sites should not be prioritised based only on diesel level. A more reliable approach is to consider diesel level, CPD, grid availability, and available days together when deciding which sites require urgent intervention.
+
+# 12. Recommendations
+
+Based on the analysis, the following recommendations are made:
+
+1. Sites with low available days should be prioritised for diesel intervention because they are closer to critical diesel levels.
+
+2. Sites with high CPD should be monitored more frequently because they consume diesel faster and can reach dry-date positions quickly.
+
+3. Sites without grid availability should receive special attention because they are more dependent on diesel generators and recorded lower average available days.
+
+4. Diesel planning should combine diesel level, CPD, grid availability, and available days rather than relying only on current diesel volume.
+
+5. A simple risk-ranking dashboard should be developed to flag sites with low diesel level, high CPD, no grid availability, and short available days.
+
+6. Regional operations teams should use available days as a daily planning indicator for diesel allocation, escalation, and vendor follow-up.
+
+7. The top ten sites with the lowest available days should be reviewed daily until their diesel position improves, because they represent the most immediate operational risk.
+
+# 13. Limitations and Further Work
+
+The study is based on spot-check data collected over a limited period. Although the dataset is useful for understanding diesel sustainability, it does not include all possible operational factors that may affect available days.
+
+For example, the analysis does not include generator condition, site load, access challenges, security issues, refuelling delays, vendor response time, or actual outage hours. These factors may also influence how quickly a site becomes operationally exposed.
+
+Future analysis can include more time periods and additional operational variables. A larger dataset covering several weeks or months would support stronger trend analysis and forecasting. Future work can also include outage hours, generator runtime, site load, and refuelling turnaround time to improve the model and make it more useful for operational planning.
+
+# 14. Conclusion
+
+This study shows how operational site data can support better diesel planning and risk prioritisation in telecom infrastructure operations. Using 118 site observations, the analysis found that diesel level, CPD, and grid availability are important explanatory variables for the available-days KPI used in diesel sustainability monitoring.
+
+The results confirm that higher diesel levels are associated with longer diesel sustainability, while higher CPD reduces the number of available days because the site consumes diesel faster. The analysis also shows that grid availability has a statistically significant effect on diesel sustainability. The regression model explains about 72.5% of the variation in available days, which means the selected variables provide useful operational insight.
+
+For regional technical operations, the findings support a more proactive and risk-based approach to diesel management. Instead of waiting for sites to approach dry dates, operations teams can use diesel level, CPD, grid status, and available days to identify high-risk sites early and intervene before service availability is affected.
+
+# References
+
+Adi, B. (2026). *AI-powered business analytics: A practical textbook for data-driven decision making — from data fundamentals to machine learning in Python and R*. Lagos Business School / markanalytics.online. https://markanalytics.online
+
+Idegwu, V. (2026). *Diesel sustainability spot-check data across selected telecom network sites* [Dataset]. Anonymised operational dataset prepared for academic analysis. Data available on request from the author.
+
+R Core Team. (2024). *R: A language and environment for statistical computing*. R Foundation for Statistical Computing.
+
+Wickham, H. (2016). *ggplot2: Elegant graphics for data analysis*. Springer.
+
+Wickham, H., Averick, M., Bryan, J., Chang, W., McGowan, L., François, R., Grolemund, G., Hayes, A., Henry, L., Hester, J., Kuhn, M., Pedersen, T. L., Miller, E., Bache, S. M., Müller, K., Ooms, J., Robinson, D., Seidel, D., Spinu, V., & Yutani, H. (2019). Welcome to the tidyverse. *Journal of Open Source Software, 4*(43), 1686.
+
+Robinson, D., Hayes, A., & Couch, S. (2024). *broom: Convert statistical objects into tidy tibbles* [R package].
+
+# AI Usage Statement
+
+AI tools were used to support code structuring, interpretation guidance, report organisation, and anonymisation of site identifiers. The dataset, business context, analytical judgement, and final interpretation were based on my professional understanding of telecom operations and diesel sustainability monitoring as a Manager, Regional Technical Operations.
